@@ -1,0 +1,4 @@
+name = Menu link alias token
+description = A proof of concept module to provide some alias tokens. 
+backdrop = 1.x
+type = module 

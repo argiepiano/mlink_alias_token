@@ -1,0 +1,62 @@
+<?php
+
+/**
+ * Implements hook_token_info_alter().
+ */
+function mlink_alias_token_token_info_alter(&$data) {
+  $data['tokens']['menu-link']['parents-alias']  = array(
+    'name' => 'Parent aliases',
+    'description' => 'An array of the parents\' aliases',
+    'type' => 'array',
+  );
+}
+
+/**
+ * Implements hook_tokens().
+ */
+function mlink_alias_token_tokens($type, $tokens, array $data = array(), array $options = array()) {
+  $replacements = array();
+  if ($type == 'menu-link' && !empty($data['menu-link'])) {
+    $link = (array) $data['menu-link'];
+    if (!empty($link['plid']) && $parent = _menu_token_link_load($link['plid'])) {
+      $sanitize = !empty($options['sanitize']);
+      foreach ($tokens as $name => $original) {
+        switch ($name) {
+          case 'parents-alias':
+            if ($parents = _mlink_alias_token_load_all_parents($link['mlid'])) {
+              $replacements[$original] = token_render_array($parents, $options);
+            }
+            break;
+        }
+      }
+    }
+    // [menu-link:parents-alias:*] chained tokens.
+    if ($parents_tokens = token_find_with_prefix($tokens, 'parents-alias')) {
+      if ($parents = _mlink_alias_token_load_all_parents($link['mlid'])) {
+        $replacements += token_generate('array', $parents_tokens, array('array' => $parents), $options);
+      }
+    }
+  }
+  return $replacements;
+}
+
+function _mlink_alias_token_load_all_parents($mlid) {
+  $cache = &backdrop_static(__FUNCTION__, array());
+
+  if (!is_numeric($mlid)) {
+    return array();
+  }
+
+  if (!isset($cache[$mlid])) {
+    module_load_include('inc', 'menu', 'menu.tokens');
+    $cache[$mlid] = array();
+    $plid = db_query("SELECT plid FROM {menu_links} WHERE mlid = :mlid", array(':mlid' => $mlid))->fetchField();
+    while ($plid && $parent = _menu_token_link_load($plid)) {
+      $alias = backdrop_get_path_alias($parent['link_path']);
+      $cache[$mlid] = array($plid => $alias) + $cache[$mlid];
+      $plid = $parent['plid'];
+    }
+  }
+
+  return $cache[$mlid];
+}
